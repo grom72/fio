@@ -1,12 +1,13 @@
 # Example RDMA client job
 [global]
 ioengine=librpma_client
-server_ip=[server_ip]
-server_port=[server_port]
+server_ip=192.168.13.207
+server_port=12345
 bs=1m
 size=2m
 #mem=mmap:/home/grom72/git/fio/test.mem
 #filename (?)
+thread
 
 [peer]
 rw=write

@@ -1200,6 +1200,7 @@ static int fio_librpmaio_post_init(struct thread_data *td)
 
 	max_bs = max(td->o.max_bs[DDIR_READ], td->o.max_bs[DDIR_WRITE]);
 	rd->send_buf.max_bs = htonl(max_bs);
+	return 0;
 
 	/* register each io_u in the free list */
 	for (i = 0; i < td->io_u_freelist.nr; i++) {
