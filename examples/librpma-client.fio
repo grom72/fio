@@ -2,14 +2,12 @@
 [global]
 ioengine=librpma_client
 server_ip=192.168.13.207
-server_port=12345
+server_port=9999
+#verb=write
 bs=1m
-size=2m
-#mem=mmap:/home/grom72/git/fio/test.mem
-#filename (?)
+size=1m
 thread
-
-[peer]
+[sender]
 rw=write
-iodepth=2
+iodepth=1
 iodepth_batch_complete=1

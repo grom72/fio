@@ -2,11 +2,13 @@
 [global]
 ioengine=librpma_server
 listen_ip=192.168.13.207
-listen_port=12345
-size=100g
-#mem=mmap:/var/tmp/tg
+listen_port=9999
+bs=1m
+size=1m
+thread
 
-[peer]
+[receiver]
+iodepth=1
 rw=read
-iodepth=2
-iodepth_batch_complete=1
+numjobs=1
+#mem=mmap:/var/tmp/tg

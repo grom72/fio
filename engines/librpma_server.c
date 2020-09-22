@@ -130,6 +130,11 @@ static int fio_librpma_server_io_init(struct thread_data *td)
 		return 1;
 	}
 
+	// if (ret = server_peer_via_address(o->listen_ip, &rd->peer)) {
+	// 	rpma_td_verror(td, ret, "rpma_peer_new");
+	// 	return 1;
+	// }
+
 	return 0;
 }
 
@@ -202,38 +207,38 @@ static int fio_librpma_server_io_post_init(struct thread_data *td)
 	pdata.len = sizeof(rpma_mr_descriptor);
 
 	/* create a new connection configuration object */
-	if ((ret = rpma_conn_cfg_new(&cfg))) {
-		rpma_td_verror(td, ret, "rpma_conn_cfg_new");
-		return 1;
-	}
+	// if ((ret = rpma_conn_cfg_new(&cfg))) {
+	// 	rpma_td_verror(td, ret, "rpma_conn_cfg_new");
+	// 	return 1;
+	// }
 
 	/* cannot fail if cfg != NULL */
 	/* # of writes/reads + flush (required for writes) */
-	(void) rpma_conn_cfg_set_sq_size(cfg, td->o.iodepth + 1);
-	(void) rpma_conn_cfg_set_rq_size(cfg, HARDCODED_RQ_SIZE);
-	(void) rpma_conn_cfg_set_cq_size(cfg, HARDCODED_CQ_SIZE);
+	// (void) rpma_conn_cfg_set_sq_size(cfg, td->o.iodepth + 1);
+	// (void) rpma_conn_cfg_set_rq_size(cfg, HARDCODED_RQ_SIZE);
+	// (void) rpma_conn_cfg_set_cq_size(cfg, HARDCODED_CQ_SIZE);
 
 	/* create a new endpoint object */
 	if ((ret = rpma_ep_listen(rd->peer, o->listen_ip, o->listen_port,
 			&rd->ep))) {
 		rpma_td_verror(td, ret, "rpma_ep_listen");
-		(void) rpma_conn_cfg_delete(&cfg);
+		// (void) rpma_conn_cfg_delete(&cfg);
 		return 1;
 	}
 
 	/* obtain an incoming connection request */
-	if ((ret = rpma_ep_next_conn_req(rd->ep, cfg, &req))) {
+	if ((ret = rpma_ep_next_conn_req(rd->ep, NULL, &req))) {
 		rpma_td_verror(td, ret, "rpma_ep_next_conn_req");
-		(void) rpma_conn_cfg_delete(&cfg);
+		// (void) rpma_conn_cfg_delete(&cfg);
 		return 1;
 	}
 
-	(void) rpma_conn_cfg_delete(&cfg);
+	// (void) rpma_conn_cfg_delete(&cfg);
 
 	/* accept the connection request and get the connection object */
 	if ((ret = rpma_conn_req_connect(&req, &pdata, &rd->conn))) {
 		rpma_td_verror(td, ret, "rpma_conn_req_connect");
-		(void) rpma_conn_req_delete(&req);
+		// (void) rpma_conn_req_delete(&req);
 		return 1;
 	}
 
