@@ -65,6 +65,7 @@ struct librpma_server_io_data {
 
 	/* created on iomem_alloc() */
 	struct rpma_mr_local *mr_local;
+	size_t mr_size;
 
 	/* create on post_init() */
 	struct rpma_ep *ep;
@@ -110,12 +111,31 @@ static int fio_librpma_server_io_close_file(struct thread_data *td, struct fio_f
 	return 0;
 }
 
+#define PMEM_FILE_CREATE	(1 << 0)
 static int fio_librpma_server_io_init(struct thread_data *td)
 {
 	struct librpma_server_io_data *rd = td->io_ops_data;
 	struct fio_librpma_server_options *o = td->eo;
 	struct ibv_context *dev = NULL;
 	int ret;
+
+	void *mem;
+	int is_pmem;
+
+	printf("fio_librpma_server_io_init\n");
+    /*hard code for pmem mmap*/
+	mem = pmem_map_file("/dev/dax0.0", 0 /* len */, 0 /* flags */,
+		0 /* mode */, &rd->mr_size, &is_pmem);
+	// mem = pmem_map_file("/dev/dax0.0", 0, PMEM_FILE_CREATE, 0666, &rd->mr_size, &is_pmem);
+	if (mem == NULL)
+		return -1;
+	
+	/* pmem is expected */
+	if (!is_pmem) {
+		(void)pmem_unmap(mem, rd->mr_size);
+		return -1;
+	}
+	printf("congrattulation!you have mmap AEP perfectly!\n");
 
 	/* obtain an IBV context for a local IP address */
 	if ((ret = rpma_utils_get_ibv_context(o->listen_ip,
@@ -130,46 +150,50 @@ static int fio_librpma_server_io_init(struct thread_data *td)
 		return 1;
 	}
 
-	// if (ret = server_peer_via_address(o->listen_ip, &rd->peer)) {
-	// 	rpma_td_verror(td, ret, "rpma_peer_new");
-	// 	return 1;
-	// }
+	if ((ret = rpma_mr_reg(rd->peer, mem, rd->mr_size, RPMA_MR_USAGE_WRITE_DST, RPMA_MR_PLT_PERSISTENT, &rd->mr_local))) {
+		// rpma_td_verror(td, ret, "rpma_mr_reg");
+		pmem_unmap(mem, rd->mr_size);
+		return 1;
+	}
+
+	printf("register done\n");
 
 	return 0;
 }
 
-int fio_librpma_server_io_iomem_alloc(struct thread_data *td, size_t total_mem)
-{
-	struct librpma_server_io_data *rd = td->io_ops_data;
-	int ret;
+// int fio_librpma_server_io_iomem_alloc(struct thread_data *td, size_t total_mem)
+// {
+// 	struct librpma_server_io_data *rd = td->io_ops_data;
+// 	int ret;
 
-	long pagesize = sysconf(_SC_PAGESIZE);
-	if (pagesize < 0) {
-		td_verror(td, errno, "sysconf");
-		return 1;
-	}
+// 	long pagesize = sysconf(_SC_PAGESIZE);
+// 	if (pagesize < 0) {
+// 		td_verror(td, errno, "sysconf");
+// 		return 1;
+// 	}
 
-	/* allocate a page size aligned local memory pool */
-	void *mem;
-	ret = posix_memalign(&mem, (size_t)pagesize, total_mem);
-	if (ret) {
-		td_verror(td, ret, "posix_memalign");
-		return 1;
-	}
+// 	/* allocate a page size aligned local memory pool */
+// 	void *mem;
+// 	ret = posix_memalign(&mem, (size_t)pagesize, total_mem);
+// 	if (ret) {
+// 		td_verror(td, ret, "posix_memalign");
+// 		return 1;
+// 	}
 
-	/* register the memory */
-	if ((ret = rpma_mr_reg(rd->peer, mem, total_mem, RPMA_MR_USAGE_WRITE_DST, RPMA_MR_PLT_VOLATILE, &rd->mr_local))) {
-		rpma_td_verror(td, ret, "rpma_mr_reg");
-		free(mem);
-		return 1;
-	}
+// 	/* register the memory */
+// 	if ((ret = rpma_mr_reg(rd->peer, mem, total_mem, RPMA_MR_USAGE_WRITE_DST, RPMA_MR_PLT_VOLATILE, &rd->mr_local))) {
+// 		rpma_td_verror(td, ret, "rpma_mr_reg");
+// 		free(mem);
+// 		return 1;
+// 	}
 
-	td->orig_buffer = mem;
-	dprint(FD_MEM, "malloc %llu %p\n", (unsigned long long) total_mem,
-							td->orig_buffer);
+// 	td->orig_buffer = mem;
+// 	dprint(FD_MEM, "malloc %llu %p\n", (unsigned long long) total_mem,
+	
+// 	 						td->orig_buffer);
 
-	return 0;
-}
+// 	return 0;
+// }
 
 void fio_librpma_server_io_iomem_free(struct thread_data *td)
 {
@@ -212,8 +236,8 @@ static int fio_librpma_server_io_post_init(struct thread_data *td)
 	// 	return 1;
 	// }
 
-	/* cannot fail if cfg != NULL */
-	/* # of writes/reads + flush (required for writes) */
+	// /* cannot fail if cfg != NULL */
+	// /* # of writes/reads + flush (required for writes) */
 	// (void) rpma_conn_cfg_set_sq_size(cfg, td->o.iodepth + 1);
 	// (void) rpma_conn_cfg_set_rq_size(cfg, HARDCODED_RQ_SIZE);
 	// (void) rpma_conn_cfg_set_cq_size(cfg, HARDCODED_CQ_SIZE);
@@ -227,7 +251,7 @@ static int fio_librpma_server_io_post_init(struct thread_data *td)
 	}
 
 	/* obtain an incoming connection request */
-	if ((ret = rpma_ep_next_conn_req(rd->ep, NULL, &req))) {
+	if ((ret = rpma_ep_next_conn_req(rd->ep,&req))) {
 		rpma_td_verror(td, ret, "rpma_ep_next_conn_req");
 		// (void) rpma_conn_cfg_delete(&cfg);
 		return 1;
@@ -309,7 +333,7 @@ FIO_STATIC struct ioengine_ops ioengine = {
 	.version		= FIO_IOOPS_VERSION,
 	.setup			= fio_librpma_server_io_setup,
 	.init			= fio_librpma_server_io_init,
-	.iomem_alloc		= fio_librpma_server_io_iomem_alloc,
+	// .iomem_alloc		= fio_librpma_server_io_iomem_alloc,
 	.iomem_free		= fio_librpma_server_io_iomem_free,
 	.post_init		= fio_librpma_server_io_post_init,
 	.queue			= fio_librpma_server_io_queue,
